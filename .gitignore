@@ -1,0 +1,13 @@
+
+# Ignore web folder and data folder
+web/
+data/
+flood_map/
+
+# Ignore Python cache
+__pycache__/
+*.pyc
+
+# Ignore other unnecessary files
+*.log
+.DS_Store
