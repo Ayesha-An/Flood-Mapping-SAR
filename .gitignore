@@ -1,6 +1,5 @@
 
 # Ignore web folder and data folder
-web/
 data/
 flood_map/
 

@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Flooded Area: Bavaria 2024</title>
+
+    <!-- Leaflet CSS -->
+    <link
+        rel="stylesheet"
+        href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+    />
+
+    <!-- Custom CSS -->
+    <link rel="stylesheet" href="style.css">
+
+    <!-- Responsive Meta -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <style>
+        /* Full-page body */
+        html, body {
+            height: 100%;
+            margin: 0;
+        }
+
+        body {
+            font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+        }
+
+        /* Header */
+        #header {
+            text-align: center;
+            padding: 15px;
+            background: #2c3e50;
+            color: #fff;
+            font-size: 1.8em;
+            font-weight: bold;
+        }
+
+        #subheader {
+            text-align: center;
+            padding-bottom: 10px;
+            font-size: 1.2em;
+            color: #34495e;
+        }
+
+        /* Map fills the rest of the screen */
+        #map {
+            height: calc(100% - 80px); /* header + subheader height */
+            width: 100%;
+        }
+
+        /* Legend */
+        .info.legend {
+            background: rgba(255, 255, 255, 0.95);
+            padding: 8px 12px;
+            line-height: 18px;
+            color: #333;
+            border-radius: 6px;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+            font-size: 14px;
+        }
+
+        .info.legend i {
+            width: 18px;
+            height: 18px;
+            float: left;
+            margin-right: 8px;
+            opacity: 0.8;
+            background: blue;
+        }
+
+        /* Hover effect */
+        .leaflet-interactive {
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .leaflet-interactive:hover {
+            opacity: 0.8;
+            transform: scale(1.02);
+        }
+    </style>
+</head>
+<body>
+
+    <div id="header">Flooded Area</div>
+    <div id="subheader">Bavaria 2024</div>
+    <div id="map"></div>
+
+    <!-- Leaflet JS -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="map.js"></script>
+</body>
+</html>
