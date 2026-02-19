@@ -57,7 +57,7 @@ def write_summary(output_dir="results", profile=None, metrics=None, good_f1_min=
             print(f"Result quality: GOOD (F1={f1:.3f} >= {good_f1_min}, IoU={iou:.3f} >= {good_iou_min})")
         else:
             summary["result_quality"] = "check"
-            print(f"Result quality: CHECK (F1={f1:.3f}, IoU={iou:.3f}). Consider tuning or slope_thresh_deg / use_dem.")
+            print(f"Result quality: CHECK (F1={f1:.3f}, IoU={iou:.3f}). Consider tuning or slope_thresh_deg / use_dsm.")
     path = os.path.join(output_dir, "summary.json")
     with open(path, "w", encoding="utf-8") as f:
         json.dump(summary, f, indent=2)

@@ -1,0 +1,9 @@
+{
+  "flood_area_ha": 516.6,
+  "flood_pixels": 51660,
+  "precision": 0.7653,
+  "recall": 0.6254,
+  "f1": 0.6883,
+  "iou": 0.5247,
+  "result_quality": "good"
+}

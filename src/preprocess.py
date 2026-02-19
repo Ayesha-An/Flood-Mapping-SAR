@@ -49,22 +49,22 @@ def detect_water(
 
     return mask
 
-def load_dem_for_grid(dem_path, profile, save_aligned_path=None):
+def load_dsm_for_grid(dsm_path, profile, save_aligned_path=None):
     """
-    Load DEM and reproject/resample to match the SAR image (same CRS, extent, resolution).
-    This makes the DEM compatible with the image so slope/elevation align pixel‑for‑pixel.
-    Returns a 2D float array of the same shape as the SAR. Optionally save aligned DEM to save_aligned_path.
+    Load DSM elevation raster and reproject/resample to match the SAR image (same CRS, extent, resolution).
+    Use DSM e.g. from InSAR (Sentinel-1 Elevation VV); slope/elevation will align pixel‑for‑pixel.
+    Returns a 2D float array of the same shape as the SAR. Optionally save aligned DSM to save_aligned_path.
     """
     height, width = profile["height"], profile["width"]
     dst_transform = profile["transform"]
     dst_crs = profile["crs"]
-    dem_dst = np.zeros((height, width), dtype=np.float64)
+    dsm_dst = np.zeros((height, width), dtype=np.float64)
 
-    with rasterio.open(dem_path) as src:
+    with rasterio.open(dsm_path) as src:
         src_nodata = src.nodata
         reproject(
             source=rasterio.band(src, 1),
-            destination=dem_dst,
+            destination=dsm_dst,
             src_transform=src.transform,
             src_crs=src.crs,
             dst_transform=dst_transform,
@@ -73,30 +73,41 @@ def load_dem_for_grid(dem_path, profile, save_aligned_path=None):
             dst_nodata=np.nan,
             resampling=Resampling.bilinear,
         )
-    np.nan_to_num(dem_dst, copy=False, nan=0.0)
+    np.nan_to_num(dsm_dst, copy=False, nan=0.0)
+    # Smooth DSM to reduce InSAR noise so slope is more stable (less over-masking of flood)
+    dsm_dst = median_filter(dsm_dst.astype(np.float32), size=3)
     if save_aligned_path:
         try:
-            profile_dem = profile.copy()
-            profile_dem.update(dtype=rasterio.float32, count=1, nodata=None)
-            with rasterio.open(save_aligned_path, "w", **profile_dem) as dst:
-                dst.write(dem_dst.astype(np.float32), 1)
+            profile_dsm = profile.copy()
+            profile_dsm.update(dtype=rasterio.float32, count=1, nodata=None)
+            with rasterio.open(save_aligned_path, "w", **profile_dsm) as dst:
+                dst.write(dsm_dst.astype(np.float32), 1)
         except Exception:
             pass  # skip if file is locked or unwritable (e.g. open in GIS)
-    return dem_dst
+    return dsm_dst
 
 
-def slope_mask(mask, dem, slope_thresh=15):
-    """Remove water on slopes steeper than slope_thresh (degrees)."""
+def slope_from_dsm(dsm, smooth_size=3):
+    """Compute slope in degrees from DSM. Smooth to reduce InSAR noise."""
     from numpy import gradient, sqrt, arctan, degrees
-    x, y = gradient(dem)
+    x, y = gradient(dsm)
     slope = degrees(arctan(sqrt(x**2 + y**2)))
+    if smooth_size > 1:
+        slope = median_filter(slope.astype(np.float32), size=smooth_size)
+    return slope
+
+
+def slope_mask(mask, dsm, slope_thresh=15, smooth_size=3):
+    """Remove water on slopes steeper than slope_thresh (degrees). Uses slope from DSM elevation.
+    smooth_size: median filter on slope to reduce DSM noise (0 = no smoothing)."""
+    slope = slope_from_dsm(dsm, smooth_size)
     mask[slope > slope_thresh] = 0
     return mask
 
 
-def elevation_mask(mask, dem, max_elevation_m):
-    """Remove water above max_elevation_m (flood unlikely at high altitude)."""
-    mask[dem > max_elevation_m] = 0
+def elevation_mask(mask, dsm, max_elevation_m):
+    """Remove water above max_elevation_m (flood unlikely at high altitude). Uses DSM elevation."""
+    mask[dsm > max_elevation_m] = 0
     return mask
 
 def save_mask(mask, path, profile):
@@ -106,12 +117,13 @@ def save_mask(mask, path, profile):
         dst.write(mask, 1)
 
 def preprocess_images(
-    pre_path, post_path, output_dir="results", dem_path=None,
-    slope_thresh=None, max_elevation_m=None,
+    pre_path, post_path, output_dir="results", dsm_path=None,
+    slope_thresh=None, slope_apply_to="flood", max_elevation_m=None,
     detect_kwargs=None,
 ):
     """
-    slope_thresh: if set (e.g. 35), remove water on steeper slopes. None = no slope masking.
+    slope_thresh: if set (e.g. 60), apply slope mask. None = no slope.
+    slope_apply_to: "flood" = save slope for detect_flood (mask flood only); "water" = mask pre/post water here.
     detect_kwargs: optional overrides for water detection (percentile, vv_thresh, vh_thresh, etc.).
     """
     os.makedirs(output_dir, exist_ok=True)
@@ -125,16 +137,22 @@ def preprocess_images(
     pre_water = detect_water(pre_vv, pre_vh, **detect_kwargs)
     post_water = detect_water(post_vv, post_vh, **detect_kwargs)
 
-    # Optional: use DEM (reprojected to SAR grid so it matches the image)
-    if dem_path is not None:
-        dem_aligned_path = os.path.join(output_dir, "dem_aligned.tif")
-        dem = load_dem_for_grid(dem_path, profile, save_aligned_path=dem_aligned_path)
+    # Optional: use DSM elevation (reprojected to SAR grid so it matches the image)
+    if dsm_path is not None:
+        dsm_aligned_path = os.path.join(output_dir, "dsm_aligned.tif")
+        dsm = load_dsm_for_grid(dsm_path, profile, save_aligned_path=dsm_aligned_path)
         if slope_thresh is not None:
-            pre_water = slope_mask(pre_water, dem, slope_thresh=slope_thresh)
-            post_water = slope_mask(post_water, dem, slope_thresh=slope_thresh)
+            if slope_apply_to == "flood":
+                # Save slope for detect_flood: mask only the flood map (keeps more flood in flat areas)
+                slope_deg = slope_from_dsm(dsm, smooth_size=3)
+                np.save(os.path.join(output_dir, "slope_deg.npy"), slope_deg)
+            else:
+                # "water": mask pre/post water by slope here (classic: remove water on steep slopes)
+                pre_water = slope_mask(pre_water, dsm, slope_thresh=slope_thresh, smooth_size=3)
+                post_water = slope_mask(post_water, dsm, slope_thresh=slope_thresh, smooth_size=3)
         if max_elevation_m is not None:
-            pre_water = elevation_mask(pre_water, dem, max_elevation_m)
-            post_water = elevation_mask(post_water, dem, max_elevation_m)
+            pre_water = elevation_mask(pre_water, dsm, max_elevation_m)
+            post_water = elevation_mask(post_water, dsm, max_elevation_m)
 
     # Save masks as numpy
     np.save(os.path.join(output_dir, "pre_water.npy"), pre_water)

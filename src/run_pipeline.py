@@ -42,15 +42,16 @@ def run_scene(scene, project_root, results_dir, defaults, results_flat=False):
     output_dir = results_dir if results_flat else os.path.join(results_dir, name)
     os.makedirs(output_dir, exist_ok=True)
 
-    dem_path = scene.get("dem") if scene.get("dem") is not None else defaults.get("default_dem")
-    dem_path = resolve_path(project_root, dem_path) if dem_path else None
+    dsm_path = scene.get("dsm") if scene.get("dsm") is not None else defaults.get("default_dsm")
+    dsm_path = resolve_path(project_root, dsm_path) if dsm_path else None
     reference_shp = scene.get("reference_shp") if scene.get("reference_shp") is not None else defaults.get("default_reference_shp")
     reference_shp = resolve_path(project_root, reference_shp) if reference_shp else None
     exclude_water = scene.get("exclude_permanent_water") if scene.get("exclude_permanent_water") is not None else defaults.get("exclude_permanent_water")
     exclude_water = resolve_path(project_root, exclude_water) if exclude_water else None
 
-    use_dem = scene.get("use_dem", defaults.get("use_dem", False))
+    use_dsm = scene.get("use_dsm", defaults.get("use_dsm", False))
     slope_thresh = scene.get("slope_thresh_deg", defaults.get("slope_thresh_deg"))
+    slope_apply_to = scene.get("slope_apply_to", defaults.get("slope_apply_to", "flood"))
     max_elevation_m = scene.get("max_elevation_m", defaults.get("max_elevation_m"))
     detect_kwargs = scene.get("detect_kwargs") or defaults.get("detect_kwargs") or {}
     flood_refine = scene.get("flood_refine", defaults.get("flood_refine", False))
@@ -65,11 +66,19 @@ def run_scene(scene, project_root, results_dir, defaults, results_flat=False):
         pre_path=pre_image, post_path=post_image, output_dir=output_dir,
         detect_kwargs=detect_kwargs,
     )
-    if use_dem and dem_path and os.path.isfile(dem_path):
-        preprocess_kw.update(dem_path=dem_path, slope_thresh=slope_thresh, max_elevation_m=max_elevation_m)
+    if use_dsm and dsm_path:
+        if os.path.isfile(dsm_path):
+            preprocess_kw.update(dsm_path=dsm_path, slope_thresh=slope_thresh, slope_apply_to=slope_apply_to, max_elevation_m=max_elevation_m)
+        else:
+            print(f"  DSM requested but file not found: {dsm_path} — running without elevation masking.")
     profile = preprocess.preprocess_images(**preprocess_kw)
 
-    detect_flood.change_detection(output_dir=output_dir, refine=flood_refine, exclude_water_path=exclude_water, profile=profile)
+    # Apply slope to flood map only when slope_apply_to == "flood" (preprocess saved slope_deg.npy)
+    slope_for_flood = slope_thresh if (use_dsm and dsm_path and slope_apply_to == "flood") else None
+    detect_flood.change_detection(
+        output_dir=output_dir, refine=flood_refine, exclude_water_path=exclude_water, profile=profile,
+        slope_thresh=slope_for_flood,
+    )
     postprocess.postprocess(output_dir=output_dir, profile=profile)
     metrics = validation.validate(output_dir=output_dir, ems_shp=reference_shp)
     good_f1 = defaults.get("good_f1_min", 0.60)
@@ -103,9 +112,10 @@ def main():
     os.makedirs(results_dir, exist_ok=True)
 
     defaults = {
-        "default_dem": config.get("default_dem"),
+        "default_dsm": config.get("default_dsm"),
         "default_reference_shp": config.get("default_reference_shp"),
-        "use_dem": config.get("use_dem", False),
+        "use_dsm": config.get("use_dsm", False),
+        "slope_apply_to": config.get("slope_apply_to", "flood"),
         "slope_thresh_deg": config.get("slope_thresh_deg"),
         "max_elevation_m": config.get("max_elevation_m"),
         "detect_kwargs": config.get("detect_kwargs") or {},
@@ -126,6 +136,21 @@ def main():
             print(f"Scene '{args.scene}' not found in config.")
             sys.exit(1)
 
+    # Expand scenes with multiple slopes: slope_thresh_deg: [50, 60, 70] -> one run per slope
+    expanded = []
+    for scene in scenes:
+        slope = scene.get("slope_thresh_deg", defaults.get("slope_thresh_deg"))
+        if isinstance(slope, list):
+            base_name = scene.get("name", "default")
+            for s in slope:
+                c = dict(scene)
+                c["name"] = f"{base_name}_s{s}"
+                c["slope_thresh_deg"] = s
+                expanded.append(c)
+        else:
+            expanded.append(scene)
+    scenes = expanded
+
     for scene in scenes:
         run_scene(scene, project_root, results_dir, defaults, results_flat=results_flat)
 
@@ -134,16 +159,16 @@ def main():
         print("\n" + "=" * 60 + "\nCOMPARISON\n" + "=" * 60)
         for scene in scenes:
             name = scene.get("name", "default")
-            use_dem = scene.get("use_dem", defaults.get("use_dem", False))
+            use_dsm = scene.get("use_dsm", defaults.get("use_dsm", False))
             slope = scene.get("slope_thresh_deg", defaults.get("slope_thresh_deg"))
-            dem_label = f"DEM {slope}°" if use_dem else "no DEM"
+            dsm_label = f"DSM {slope}°" if use_dsm else "no DSM"
             path = os.path.join(results_dir, name, "summary.json")
             if os.path.isfile(path):
                 with open(path, "r", encoding="utf-8") as f:
                     s = json.load(f)
-                print(f"  {name} ({dem_label}):  F1={s.get('f1', '-')}  IoU={s.get('iou', '-')}  ha={s.get('flood_area_ha', '-')}  {s.get('result_quality', '')}")
+                print(f"  {name} ({dsm_label}):  F1={s.get('f1', '-')}  IoU={s.get('iou', '-')}  ha={s.get('flood_area_ha', '-')}  {s.get('result_quality', '')}")
             else:
-                print(f"  {name} ({dem_label}):  (no summary.json)")
+                print(f"  {name} ({dsm_label}):  (no summary.json)")
         print("=" * 60)
 
     print("\nPipeline finished. Check the results folder(s).")

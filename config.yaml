@@ -1,14 +1,16 @@
 # Flood mapping pipeline config. Paths relative to project root.
+# Elevation: use DSM (e.g. InSAR Elevation VV from SNAP) or DEM.
 project_root: .
 results_dir: results
-results_flat: false   # true = all in results/; false = results/<scene_name>/
+results_flat: false
 
-default_dem: data/elevation.tif
+default_dsm: data/DSM.tif   # DSM elevation raster (e.g. InSAR Elevation VV)
 default_reference_shp: null
 exclude_permanent_water: null
 
-use_dem: true
-slope_thresh_deg: 45
+use_dsm: true
+slope_thresh_deg: 60
+slope_apply_to: flood   # "flood" = mask slope on flood map only; "water" = mask slope on pre/post water
 max_elevation_m: null
 detect_kwargs: {}
 flood_refine: false
@@ -17,17 +19,18 @@ good_f1_min: 0.60
 good_iou_min: 0.45
 
 scenes:
-  - name: flood_with_dem
+  - name: flood_with_dsm
     pre_image: data/may.tif
     post_image: data/june.tif
-    dem: null
+    dsm: null
     reference_shp: data/EMSN_199.shp
-    use_dem: true
-    slope_thresh_deg: 45
+    use_dsm: true
+    slope_thresh_deg: [50, 60, 70]   # try multiple slopes: one run per value, comparison at end
+    slope_apply_to: flood   # or "water" to mask pre/post water by slope
 
-  - name: flood_without_dem
+  - name: flood_without_dsm
     pre_image: data/may.tif
     post_image: data/june.tif
-    dem: null
+    dsm: null
     reference_shp: data/EMSN_199.shp
-    use_dem: false
+    use_dsm: false

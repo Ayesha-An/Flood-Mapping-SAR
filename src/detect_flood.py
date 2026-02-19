@@ -35,8 +35,9 @@ def _load_exclude_mask(path, profile):
         )
     return (out != 0)
 
-def change_detection(output_dir="results", refine=False, exclude_water_path=None, profile=None):
-    """Change detection: flood = post_water and not pre_water. Optionally exclude river/permanent water."""
+def change_detection(output_dir="results", refine=False, exclude_water_path=None, profile=None, slope_thresh=None):
+    """Change detection: flood = post_water and not pre_water. Optionally exclude river/permanent water.
+    When slope_thresh is set and slope_deg.npy exists (from DSM in preprocess), remove flood on slopes steeper than slope_thresh."""
     pre_water = np.load(os.path.join(output_dir, "pre_water.npy"))
     post_water = np.load(os.path.join(output_dir, "post_water.npy"))
 
@@ -44,6 +45,11 @@ def change_detection(output_dir="results", refine=False, exclude_water_path=None
     if exclude_water_path and os.path.isfile(exclude_water_path) and profile is not None:
         exclude = _load_exclude_mask(exclude_water_path, profile)
         flood_area[exclude] = 0
+    # Apply DSM slope mask to flood only (keeps more flood in flat areas, removes flood on steep slopes)
+    slope_path = os.path.join(output_dir, "slope_deg.npy")
+    if slope_thresh is not None and os.path.isfile(slope_path):
+        slope = np.load(slope_path)
+        flood_area[slope > slope_thresh] = 0
     if refine:
         from skimage.morphology import closing, disk
         flood_area = closing(flood_area, disk(1)).astype(np.uint8)
