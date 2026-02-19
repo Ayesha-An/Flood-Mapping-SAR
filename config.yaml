@@ -1,0 +1,33 @@
+# Flood mapping pipeline config. Paths relative to project root.
+project_root: .
+results_dir: results
+results_flat: false   # true = all in results/; false = results/<scene_name>/
+
+default_dem: data/elevation.tif
+default_reference_shp: null
+exclude_permanent_water: null
+
+use_dem: true
+slope_thresh_deg: 45
+max_elevation_m: null
+detect_kwargs: {}
+flood_refine: false
+
+good_f1_min: 0.60
+good_iou_min: 0.45
+
+scenes:
+  - name: flood_with_dem
+    pre_image: data/may.tif
+    post_image: data/june.tif
+    dem: null
+    reference_shp: data/EMSN_199.shp
+    use_dem: true
+    slope_thresh_deg: 45
+
+  - name: flood_without_dem
+    pre_image: data/may.tif
+    post_image: data/june.tif
+    dem: null
+    reference_shp: data/EMSN_199.shp
+    use_dem: false

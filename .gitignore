@@ -2,6 +2,7 @@
 # Ignore web folder and data folder
 data/
 flood_map/
+presentation_Geomob/
 
 # Ignore Python cache
 __pycache__/
