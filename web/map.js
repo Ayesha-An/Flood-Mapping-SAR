@@ -1,7 +1,10 @@
 // ------------------------------
-// Create Map
+// Create Map (do not run when opened from file:// - CORS blocks JSON)
 // ------------------------------
-console.log("Initializing map...");
+if (window.location.protocol === 'file:') {
+    // Full-page overlay is shown in index.html; skip map and fetch to avoid CORS errors
+} else {
+(function() {
 var mapDiv = document.getElementById('map');
 if (!mapDiv) {
     console.error("Map div not found!");
@@ -111,14 +114,19 @@ var floodLayerDSM = L.geoJSON(null, {
     }
 });
 
-// Load both GeoJSON files
+// Load both GeoJSON files (path relative to current page so it works with serve.py or Live Server)
+var dataDir = (function() {
+    var path = window.location.pathname;
+    if (path.endsWith('/') || path === '') return 'data/';
+    return path.replace(/\/[^/]*$/, '/') + 'data/';
+})();
 Promise.all([
-    fetch('data/flood_area_polygons_WGS84.json').then(r => {
-        if (!r.ok) throw new Error(`HTTP ${r.status}: ${r.statusText}`);
+    fetch(dataDir + 'flood_area_polygons_WGS84.json').then(function(r) {
+        if (!r.ok) throw new Error('HTTP ' + r.status + ': ' + r.statusText);
         return r.json();
     }),
-    fetch('data/flood_area_polygons_WGS84_dsm60.json').then(r => {
-        if (!r.ok) throw new Error(`HTTP ${r.status}: ${r.statusText}`);
+    fetch(dataDir + 'flood_area_polygons_WGS84_dsm60.json').then(function(r) {
+        if (!r.ok) throw new Error('HTTP ' + r.status + ': ' + r.statusText);
         return r.json();
     })
 ])
@@ -150,7 +158,10 @@ Promise.all([
         alert("No flood polygons found in data files. Check console for details.");
         return;
     }
-    
+
+    var noserverMsg = document.getElementById('noserver-msg');
+    if (noserverMsg) noserverMsg.style.display = 'none';
+
     // Add layer control after layers are created
     layerControl = L.control.layers(null, overlayMaps, {
         position: 'topright',
@@ -192,9 +203,14 @@ Promise.all([
         map.setView([48.77, 13.01], 12);
     }
 })
-.catch(error => {
+.catch(function(error) {
     console.error("Error loading flood layers:", error);
-    alert("Failed to load flood map data. Check browser console (F12) for details.");
+    var msg = document.getElementById('noserver-msg');
+    if (msg) {
+        msg.style.display = 'block';
+        msg.innerHTML = "Flood data could not load. Use the local server: <code>cd web && python serve.py</code> then open <a href='http://localhost:8000/index.html'>http://localhost:8000/index.html</a>";
+    }
+    alert("Failed to load flood map data. Open the page via the server (see yellow message above).");
 });
 
 // ------------------------------
@@ -232,3 +248,6 @@ legend.addTo(map);
 // Scale bar
 // ------------------------------
 L.control.scale({position: 'bottomleft', imperial: false}).addTo(map);
+
+})(); // end run only when not file://
+}

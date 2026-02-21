@@ -84,11 +84,31 @@
 </head>
 <body>
 
+    <div id="file-protocol-block" style="display:none; position:fixed; top:0; left:0; right:0; bottom:0; background:#2c3e50; color:#fff; z-index:9999; padding:40px; box-sizing:border-box; overflow:auto;">
+        <div style="max-width:500px; margin:60px auto; text-align:center;">
+            <h1 style="font-size:1.5em; margin-bottom:20px;">Flood data cannot load from disk</h1>
+            <p style="margin-bottom:24px; line-height:1.6;">You opened this page with <code>file://</code>. Browsers block loading the flood JSON (CORS). Use the local server instead:</p>
+            <ol style="text-align:left; margin-bottom:28px; line-height:2;">
+                <li>Open a terminal in the project folder.</li>
+                <li>Run: <code style="background:#1a252f; padding:6px 10px; display:block; margin:8px 0;">cd web && python serve.py</code></li>
+                <li>In your browser, open: <a href="http://localhost:8000/index.html" style="color:#5dade2;">http://localhost:8000/index.html</a></li>
+            </ol>
+            <a href="http://localhost:8000/index.html" style="display:inline-block; background:#27ae60; color:#fff; padding:14px 28px; text-decoration:none; border-radius:8px; font-weight:bold;">Open map (server must be running)</a>
+        </div>
+    </div>
     <div id="header">Flooded Area Comparison</div>
+    <div id="noserver-msg" style="display:none; text-align:center; padding:12px; background:#fff3cd; color:#856404; font-size:14px;">
+        Flood data could not load. Use the local server.
+    </div>
     <div id="map"></div>
 
     <!-- Leaflet JS -->
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script>
+        if (window.location.protocol === 'file:') {
+            document.getElementById('file-protocol-block').style.display = 'block';
+        }
+    </script>
     <script src="map.js"></script>
 </body>
 </html>
